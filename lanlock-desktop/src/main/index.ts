@@ -4,6 +4,7 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import { v4 as uuidv4 } from 'uuid'
 import Store from 'electron-store'
+import { startMonitor, stopMonitor, getSessionActive } from './processMonitor'
 
 const execAsync = promisify(exec)
 
@@ -43,6 +44,12 @@ const pcId = resolvePcId()
 ipcMain.handle('get-pc-id', () => pcId)
 
 ipcMain.handle('lock-workstation', async () => {
+  if (getSessionActive()) {
+    const reason = 'Lock blocked: Game process active.'
+    console.warn(`[LanLock] ${reason}`)
+    return { locked: false, reason }
+  }
+
   try {
     await execAsync('rundll32.exe user32.dll,LockWorkStation')
     console.log('[LanLock] Workstation locked.')
@@ -85,11 +92,16 @@ function createWindow(): void {
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
+  startMonitor()
   createWindow()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('will-quit', () => {
+  stopMonitor()
 })
 
 app.on('window-all-closed', () => {

@@ -13,9 +13,11 @@
   },
   "dependencies": {
     "electron-store": "^8.2.0",
+    "ps-list": "^7.2.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-qr-code": "^2.0.15",
+    "socket.io-client": "^4.8.3",
     "uuid": "^11.0.0"
   },
   "devDependencies": {

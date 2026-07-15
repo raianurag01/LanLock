@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
 import QRCode from 'react-qr-code'
+import { socketService, type ConnectionStatus } from './services/socket.service'
 
 const ACTION_YELLOW = '#FACC15'
+
+const STATUS_META: Record<ConnectionStatus, { label: string; color: string }> = {
+  connecting: { label: 'Connecting…', color: ACTION_YELLOW },
+  connected: { label: 'Pairing Mode Active', color: '#22c55e' },
+  disconnected: { label: 'Server Offline — Retrying', color: '#f87171' },
+  rejected: { label: 'Not Paired — Scan QR First', color: '#f87171' }
+}
 
 function App(): React.JSX.Element {
   // The pcId lives in the main process (persisted via electron-store) and is
@@ -9,6 +17,7 @@ function App(): React.JSX.Element {
   // refreshes and reboots always show the same QR code.
   const [pcId, setPcId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [status, setStatus] = useState<ConnectionStatus>('connecting')
 
   useEffect(() => {
     window.lanlock
@@ -16,6 +25,14 @@ function App(): React.JSX.Element {
       .then(setPcId)
       .catch(() => setError('Could not load device identity from main process.'))
   }, [])
+
+  useEffect(() => {
+    if (!pcId) return undefined
+    socketService.connect(pcId, setStatus)
+    return () => socketService.dispose()
+  }, [pcId])
+
+  const statusMeta = STATUS_META[status]
 
   return (
     <div
@@ -96,14 +113,14 @@ function App(): React.JSX.Element {
                 width: 8,
                 height: 8,
                 borderRadius: '50%',
-                backgroundColor: '#22c55e',
-                boxShadow: '0 0 8px #22c55e',
+                backgroundColor: statusMeta.color,
+                boxShadow: `0 0 8px ${statusMeta.color}`,
                 flexShrink: 0,
                 animation: 'pulse 2s ease-in-out infinite'
               }}
             />
-            <span style={{ fontSize: '0.875rem', color: '#22c55e', fontWeight: 600 }}>
-              Pairing Mode Active
+            <span style={{ fontSize: '0.875rem', color: statusMeta.color, fontWeight: 600 }}>
+              {statusMeta.label}
             </span>
           </div>
 
