@@ -17,10 +17,21 @@ interface GatewayHandshakeAuth {
 
 type DeviceEvent = 'lock-device' | 'unlock-device';
 
+/**
+ * Allowed WebSocket origins. FRONTEND_URL may hold a comma-separated list
+ * (e.g. "https://app.lanlock.io,http://localhost:5173"). The dev fallbacks
+ * cover the API host itself and the electron-vite dev server so the desktop
+ * agent keeps working locally. Non-browser clients (no Origin header) are
+ * not affected by CORS — the handshake auth below is what gates them.
+ */
+const ALLOWED_ORIGINS = process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',').map((o) => o.trim())
+    : ['http://localhost:3000', 'http://localhost:5173'];
+
 @Injectable()
 @WebSocketGateway({
     cors: {
-        origin: process.env.CORS_ORIGIN ?? '*',
+        origin: ALLOWED_ORIGINS,
         credentials: true,
     },
 })
