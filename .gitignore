@@ -1,0 +1,76 @@
+# ── Dependencies ─────────────────────────────────────────────
+node_modules/
+
+# ── Environment & secrets ────────────────────────────────────
+# .env.example is intentionally NOT ignored — it documents config.
+.env
+.env.*
+!.env.example
+
+# ── Build output ─────────────────────────────────────────────
+dist/
+build/
+out/
+web-build/
+*.tsbuildinfo
+
+# ── NestJS / Nx ──────────────────────────────────────────────
+.nx/cache
+.nx/workspace-data
+.nx/migrate-runs
+/generated/prisma
+
+# ── Expo / React Native ──────────────────────────────────────
+.expo/
+expo-env.d.ts
+.metro-health-check*
+.kotlin/
+*.orig.*
+
+# ── Mobile signing material (never commit) ───────────────────
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# ── Electron (lanlock-desktop, when scaffolded) ──────────────
+release/
+*.exe
+*.dmg
+*.AppImage
+*.snap
+*.blockmap
+
+# ── Logs & debug ─────────────────────────────────────────────
+logs/
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+lerna-debug.*
+
+# ── Test coverage ────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ── Editor / tooling local state ─────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln.docstates
+
+# ── Claude Code local (machine-specific) settings ────────────
+.claude/settings.local.json
+
+# ── OS junk ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/

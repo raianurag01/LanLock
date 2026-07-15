@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # NestJS Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: lanlock-cloud
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=${DATABASE_USER:-postgres}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD:-postgres}
+      - DATABASE_NAME=${DATABASE_NAME:-lanlock}
+    depends_on:
+      - postgres
+    networks:
+      - lanlock-network
+    restart: unless-stopped
+
+  # PostgreSQL Database (placeholder)
+  postgres:
+    image: postgres:16-alpine
+    container_name: lanlock-postgres
+    ports:
+      - '5432:5432'
+    environment:
+      - POSTGRES_USER=${DATABASE_USER:-postgres}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD:-postgres}
+      - POSTGRES_DB=${DATABASE_NAME:-lanlock}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - lanlock-network
+    restart: unless-stopped
+
+networks:
+  lanlock-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

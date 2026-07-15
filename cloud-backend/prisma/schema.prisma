@@ -1,0 +1,110 @@
+// Prisma Schema for LanLock Cloud Backend
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// User - Represents an authenticated account (gamer or admin)
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  username     String   @unique
+  walletBalance Int     @default(0) @map("wallet_balance")
+  role         UserRole @default(GAMER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  sessions Session[]
+  devices  UserDevice[]
+
+  @@map("users")
+}
+
+// UserDevice - Links a paired PC "Lock" (by its pcId) to an owning User.
+model UserDevice {
+  id        String   @id @default(uuid())
+  pcId      String   @unique @map("pc_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_devices")
+}
+
+// Venue - Represents a gaming venue/cafe
+model Venue {
+  id        String   @id @default(uuid())
+  name      String
+  location  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  pcNodes PCNode[]
+
+  @@map("venues")
+}
+
+// PCNode - Represents a gaming PC at a venue
+model PCNode {
+  id        String   @id @default(uuid())
+  name      String
+  specs     String?
+  status    PCStatus @default(OFFLINE)
+  venueId   String   @map("venue_id")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  venue    Venue     @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  sessions Session[]
+
+  @@map("pc_nodes")
+}
+
+// Session - Represents a gaming session
+model Session {
+  id        String        @id @default(uuid())
+  userId    String        @map("user_id")
+  pcNodeId  String        @map("pc_node_id")
+  startTime DateTime      @default(now()) @map("start_time")
+  endTime   DateTime?     @map("end_time")
+  status    SessionStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  // Relations
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pcNode PCNode @relation(fields: [pcNodeId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// Enums
+enum UserRole {
+  GAMER
+  ADMIN
+}
+
+enum PCStatus {
+  ONLINE
+  OFFLINE
+  IN_USE
+  MAINTENANCE
+}
+
+enum SessionStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}

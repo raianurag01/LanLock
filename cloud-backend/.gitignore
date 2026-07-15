@@ -1,0 +1,11 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+/generated/prisma
+
+
+
+.nx/cache
+.nx/workspace-data
+.nx/migrate-runs
