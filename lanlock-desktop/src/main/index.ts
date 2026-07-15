@@ -39,31 +39,67 @@ function resolvePcId(): string {
 
 const pcId = resolvePcId()
 
+let mainWindow: BrowserWindow | null = null
+
+// ── Locking ──────────────────────────────────────────────────────────────────
+
+const GRACE_PERIOD_SECONDS = 60
+
+// Non-null while a grace countdown is running. Deliberately never cleared by
+// anything except its own firing — once started, the lock is inevitable.
+let graceTimer: ReturnType<typeof setTimeout> | null = null
+
+async function lockNow(): Promise<void> {
+  await execAsync('rundll32.exe user32.dll,LockWorkStation')
+  console.log('[LanLock] Workstation locked.')
+}
+
 // ── IPC handlers ─────────────────────────────────────────────────────────────
 
 ipcMain.handle('get-pc-id', () => pcId)
 
 ipcMain.handle('lock-workstation', async () => {
-  if (getSessionActive()) {
-    const reason = 'Lock blocked: Game process active.'
+  // No game running — lock immediately, no ceremony.
+  if (!getSessionActive()) {
+    try {
+      await lockNow()
+      return { locked: true }
+    } catch (err) {
+      console.error('[LanLock] Lock command failed:', err)
+      throw err
+    }
+  }
+
+  // Game running — the lock still happens, just after a grace period.
+  if (graceTimer !== null) {
+    const reason = 'Grace period already in progress.'
     console.warn(`[LanLock] ${reason}`)
     return { locked: false, reason }
   }
 
-  try {
-    await execAsync('rundll32.exe user32.dll,LockWorkStation')
-    console.log('[LanLock] Workstation locked.')
-    return { locked: true }
-  } catch (err) {
-    console.error('[LanLock] Lock command failed:', err)
-    throw err
+  console.warn(
+    `[LanLock] Game process active — locking in ${GRACE_PERIOD_SECONDS}s (grace period).`
+  )
+  mainWindow?.webContents.send('start-grace-period', GRACE_PERIOD_SECONDS)
+
+  graceTimer = setTimeout(() => {
+    graceTimer = null
+    lockNow().catch((err) => {
+      console.error('[LanLock] Grace-period lock failed:', err)
+    })
+  }, GRACE_PERIOD_SECONDS * 1_000)
+
+  return {
+    locked: false,
+    reason: `Grace period started — locking in ${GRACE_PERIOD_SECONDS}s.`,
+    gracePeriod: GRACE_PERIOD_SECONDS
   }
 })
 
 // ── Window ───────────────────────────────────────────────────────────────────
 
 function createWindow(): void {
-  const mainWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 520,
     height: 720,
     show: false,
@@ -74,18 +110,22 @@ function createWindow(): void {
       sandbox: false
     }
   })
+  mainWindow = win
 
-  mainWindow.on('ready-to-show', () => mainWindow.show())
+  win.on('ready-to-show', () => win.show())
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = null
+  })
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
   })
 
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
 

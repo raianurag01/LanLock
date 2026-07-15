@@ -18,6 +18,8 @@ function App(): React.JSX.Element {
   const [pcId, setPcId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
+  // null = no grace period running; 0 = countdown finished, lock imminent.
+  const [gracePeriodLeft, setGracePeriodLeft] = useState<number | null>(null)
 
   useEffect(() => {
     window.lanlock
@@ -32,7 +34,74 @@ function App(): React.JSX.Element {
     return () => socketService.dispose()
   }, [pcId])
 
+  useEffect(() => {
+    return window.lanlock.onGracePeriodStart((seconds) => {
+      setGracePeriodLeft(seconds)
+    })
+  }, [])
+
+  // Tick the visible countdown. The actual lock is driven by the main
+  // process timer — this is display only, so drift or tampering here
+  // changes nothing about when the lock fires.
+  useEffect(() => {
+    if (gracePeriodLeft === null || gracePeriodLeft <= 0) return undefined
+    const tick = setTimeout(() => {
+      setGracePeriodLeft((s) => (s === null ? null : s - 1))
+    }, 1_000)
+    return () => clearTimeout(tick)
+  }, [gracePeriodLeft])
+
   const statusMeta = STATUS_META[status]
+
+  if (gracePeriodLeft !== null) {
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: '#7f1d1d',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          color: '#ffffff',
+          textAlign: 'center',
+          userSelect: 'none',
+          zIndex: 9999,
+          animation: gracePeriodLeft <= 10 ? 'urgentFlash 1s ease-in-out infinite' : undefined
+        }}
+      >
+        <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>⚠️</div>
+        <h1 style={{ fontSize: '2rem', fontWeight: 800, letterSpacing: '0.02em', margin: 0 }}>
+          SESSION EXPIRED
+        </h1>
+        <div
+          style={{
+            fontSize: '9rem',
+            fontWeight: 900,
+            lineHeight: 1.1,
+            fontVariantNumeric: 'tabular-nums',
+            margin: '0.5rem 0'
+          }}
+        >
+          {gracePeriodLeft}
+        </div>
+        <p style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>
+          {gracePeriodLeft > 0 ? `LOCKING IN ${gracePeriodLeft} SECONDS` : 'LOCKING NOW'}
+        </p>
+        <p style={{ fontSize: '1.125rem', marginTop: '1.5rem', opacity: 0.9 }}>
+          PLEASE SAVE YOUR GAME.
+        </p>
+        <style>{`
+          @keyframes urgentFlash {
+            0%, 100% { background-color: #7f1d1d; }
+            50% { background-color: #b91c1c; }
+          }
+        `}</style>
+      </div>
+    )
+  }
 
   return (
     <div
