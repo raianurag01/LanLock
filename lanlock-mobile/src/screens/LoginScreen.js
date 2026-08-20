@@ -11,9 +11,10 @@ import {
     ScrollView,
 } from 'react-native';
 import { login, getApiErrorMessage } from '../api/auth';
-import { saveToken } from '../utils/secureStore';
+import { useAuth } from '../context/AuthContext';
 
 export default function LoginScreen({ navigation }) {
+    const { signIn } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -26,15 +27,14 @@ export default function LoginScreen({ navigation }) {
 
         setSubmitting(true);
         try {
-            const { accessToken } = await login({
+            const { accessToken, user } = await login({
                 email: email.trim(),
                 password,
             });
-            await saveToken(accessToken);
-
-            // Only reached on a 2xx response — reset the stack so the user
-            // cannot navigate "back" into the auth flow.
-            navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+            // Only reached on a 2xx response — signIn persists the token and
+            // AuthContext swaps the navigator to the signed-in stack, so the
+            // user can never navigate "back" into the auth flow.
+            await signIn(accessToken, user);
         } catch (error) {
             Alert.alert('Login failed', getApiErrorMessage(error, 'Invalid credentials'));
         } finally {

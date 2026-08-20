@@ -1,10 +1,10 @@
 // API client for LanLock cloud backend
-const API_BASE_URL = 'http://10.0.2.2:3000/api/v1'; // Android emulator localhost
+import { API_URL } from './config';
 
 export const api = {
     // Fetch inventory of available PCs
     async getInventory() {
-        const response = await fetch(`${API_BASE_URL}/inventory`);
+        const response = await fetch(`${API_URL}/inventory`);
         if (!response.ok) {
             throw new Error('Failed to fetch inventory');
         }
@@ -13,7 +13,7 @@ export const api = {
 
     // Health check
     async healthCheck() {
-        const response = await fetch(`${API_BASE_URL}/health`);
+        const response = await fetch(`${API_URL}/health`);
         return response.json();
     },
 };

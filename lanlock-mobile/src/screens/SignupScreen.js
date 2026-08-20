@@ -11,9 +11,10 @@ import {
     ScrollView,
 } from 'react-native';
 import { signup, getApiErrorMessage } from '../api/auth';
-import { saveToken } from '../utils/secureStore';
+import { useAuth } from '../context/AuthContext';
 
 export default function SignupScreen({ navigation }) {
+    const { signIn } = useAuth();
     const [email, setEmail] = useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -31,15 +32,14 @@ export default function SignupScreen({ navigation }) {
 
         setSubmitting(true);
         try {
-            const { accessToken } = await signup({
+            const { accessToken, user } = await signup({
                 email: email.trim(),
                 username: username.trim(),
                 password,
             });
-            await saveToken(accessToken);
-
-            // Only reached on a 2xx response.
-            navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+            // Only reached on a 2xx response — AuthContext swaps to the
+            // signed-in navigator.
+            await signIn(accessToken, user);
         } catch (error) {
             Alert.alert(
                 'Sign up failed',

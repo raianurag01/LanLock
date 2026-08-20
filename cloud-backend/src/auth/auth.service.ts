@@ -1,12 +1,14 @@
 import {
     ConflictException,
     Injectable,
+    NotFoundException,
     UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { WalletService } from '../wallet/wallet.service';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
 import {
@@ -40,6 +42,7 @@ export class AuthService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly jwtService: JwtService,
+        private readonly walletService: WalletService,
     ) {}
 
     async signup(dto: SignupDto): Promise<AuthResponse> {
@@ -119,7 +122,30 @@ export class AuthService {
             username: user.username,
             role: user.role,
             walletBalance: user.walletBalance,
+            venueId: user.venueId,
         };
+    }
+
+    /**
+     * Throws unless the pcId exists AND is linked to this user. A single 404
+     * for both "unknown pcId" and "not yours" avoids leaking which pcIds exist.
+     */
+    async assertDeviceOwned(userId: string, pcId: string): Promise<void> {
+        const device = await this.prisma.userDevice.findUnique({
+            where: { pcId },
+        });
+        if (!device || device.userId !== userId) {
+            throw new NotFoundException('No linked PC found for this account');
+        }
+    }
+
+    /**
+     * Releases a pairing at end-of-session so the PC becomes claimable by the
+     * next QR scan. Caller must have verified ownership (assertDeviceOwned).
+     * deleteMany is a no-op (not an error) if the record is already gone.
+     */
+    async unlinkPc(pcId: string): Promise<void> {
+        await this.prisma.userDevice.deleteMany({ where: { pcId } });
     }
 
     /** Returns all devices linked to the given user, newest first. */
@@ -137,17 +163,34 @@ export class AuthService {
 
     /**
      * Links a PC "Lock" (identified by pcId from its pairing QR) to the
-     * authenticated user. Idempotent for the same owner; conflicts if another
-     * user already claimed the PC.
+     * authenticated user, and opens the billing session for it. Idempotent
+     * for the same owner; conflicts if another user already claimed the PC.
      */
-    async linkPc(userId: string, pcId: string): Promise<LinkPcResponse> {
+    async linkPc(
+        userId: string,
+        pcId: string,
+        venueId?: string,
+    ): Promise<LinkPcResponse> {
+        // Unknown venueId is stored as null rather than rejected — an older
+        // desktop build or a stale QR should never block pairing.
+        const resolvedVenueId = venueId
+            ? await this.resolveVenueId(venueId)
+            : null;
+
         const existing = await this.prisma.userDevice.findUnique({
             where: { pcId },
         });
 
         if (existing) {
             if (existing.userId === userId) {
-                // Already owned by this user — treat as a no-op success.
+                // Already owned by this user — treat as a no-op success, but
+                // still make sure a billing session is open (covers a QR
+                // re-scan after an app restart mid-session).
+                await this.walletService.openDeviceSession(
+                    userId,
+                    pcId,
+                    resolvedVenueId,
+                );
                 return { message: 'PC is already linked to your account', pcId };
             }
             throw new ConflictException(
@@ -173,7 +216,17 @@ export class AuthService {
             throw error;
         }
 
+        await this.walletService.openDeviceSession(userId, pcId, resolvedVenueId);
         return { message: 'PC linked successfully', pcId };
+    }
+
+    /** Confirms a venueId exists; returns null (not a throw) if it doesn't. */
+    private async resolveVenueId(venueId: string): Promise<string | null> {
+        const venue = await this.prisma.venue.findUnique({
+            where: { id: venueId },
+            select: { id: true },
+        });
+        return venue?.id ?? null;
     }
 
     private buildAuthResponse(user: User): AuthResponse {

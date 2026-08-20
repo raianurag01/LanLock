@@ -1,30 +1,42 @@
 import psList from 'ps-list'
 
-// Extend as needed. All names compared lowercase.
-const GAME_PROCESSES = new Set([
-  'steam.exe',
-  'epicgameslauncher.exe',
-  'valorant.exe',
-  'valorant-win64-shipping.exe',
-  'riotclientservices.exe',
-  'deadlock.exe',
-  'cs2.exe',
-  'csgo.exe'
+// Extend as needed. All names compared lowercase. Value is the friendly name
+// surfaced to the mobile app / dashboards.
+const GAME_PROCESSES = new Map<string, string>([
+  ['steam.exe', 'Steam'],
+  ['epicgameslauncher.exe', 'Epic Games'],
+  ['valorant.exe', 'VALORANT'],
+  ['valorant-win64-shipping.exe', 'VALORANT'],
+  ['riotclientservices.exe', 'Riot Client'],
+  ['deadlock.exe', 'Deadlock'],
+  ['cs2.exe', 'CS2'],
+  ['csgo.exe', 'CS:GO']
 ])
 
 let isSessionActive = false
+let detectedGame: string | null = null
 let intervalId: ReturnType<typeof setInterval> | null = null
 
 async function pollProcesses(): Promise<void> {
   try {
     const processes = await psList()
     const running = new Set(processes.map((p) => p.name.toLowerCase()))
-    const detected = [...GAME_PROCESSES].some((g) => running.has(g))
+    let match: string | null = null
+    for (const [proc, friendly] of GAME_PROCESSES) {
+      if (running.has(proc)) {
+        match = friendly
+        break
+      }
+    }
+    const detected = match !== null
 
-    if (detected !== isSessionActive) {
+    if (detected !== isSessionActive || match !== detectedGame) {
       isSessionActive = detected
+      detectedGame = match
       console.log(
-        `[ProcessMonitor] Session → ${isSessionActive ? 'ACTIVE (game detected)' : 'IDLE'}`
+        `[ProcessMonitor] Session → ${
+          isSessionActive ? `ACTIVE (${detectedGame})` : 'IDLE'
+        }`
       )
     }
   } catch (err) {
@@ -54,4 +66,9 @@ export function stopMonitor(): void {
 
 export function getSessionActive(): boolean {
   return isSessionActive
+}
+
+/** Friendly name of the currently detected game process, or null when idle. */
+export function getDetectedGame(): string | null {
+  return detectedGame
 }

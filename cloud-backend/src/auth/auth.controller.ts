@@ -59,6 +59,6 @@ export class AuthController {
         @CurrentUser() user: AuthenticatedUser,
         @Body() dto: LinkPcDto,
     ): Promise<LinkPcResponse> {
-        return this.authService.linkPc(user.id, dto.pcId);
+        return this.authService.linkPc(user.id, dto.pcId, dto.venueId);
     }
 }

@@ -9,6 +9,9 @@ import { EventsModule } from './events/events.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { AuthModule } from './auth/auth.module';
+import { VenuesModule } from './venues/venues.module';
+import { OrdersModule } from './orders/orders.module';
+import { WalletModule } from './wallet/wallet.module';
 
 @Module({
   imports: [
@@ -28,6 +31,9 @@ import { AuthModule } from './auth/auth.module';
     EventsModule,
     InventoryModule,
     AuthModule,
+    VenuesModule,
+    OrdersModule,
+    WalletModule,
   ],
   controllers: [AppController],
   providers: [

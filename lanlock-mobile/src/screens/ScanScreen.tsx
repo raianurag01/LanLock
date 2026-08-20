@@ -19,33 +19,51 @@ import { linkPc, getApiErrorMessage } from '../api/auth';
 const { width, height } = Dimensions.get('window');
 const innerDimension = width * 0.7;
 
-// Shape of the QR payload produced by the desktop "Lock" client.
+// How long the success screen lingers before we auto-dismiss back to Home.
+const SUCCESS_DISMISS_MS = 1500;
+
+// Shape of the QR payload produced by the desktop "Lock" client. venueId is
+// additive — older desktop builds omit it and pairing still works (the
+// session just gets no venue attribution: LanCoins stays off).
 interface LinkPcPayload {
     action: string;
     pcId: string;
+    venueId?: string;
 }
 
 // Minimal navigation contract so we avoid `any` without a typed navigator.
 interface ScanScreenProps {
     navigation: {
         goBack: () => void;
-        navigate: (screen: string) => void;
+        navigate: (screen: string, params?: { screen: string }) => void;
     };
 }
 
 export default function ScanScreen({ navigation }: ScanScreenProps): React.JSX.Element {
     const [permission, requestPermission] = useCameraPermissions();
     const [submitting, setSubmitting] = useState(false);
+    const [linked, setLinked] = useState(false);
 
     // Guards against expo-camera firing onBarcodeScanned repeatedly for the
     // same frame while we are already handling a scan.
     const lockRef = useRef(false);
+    // Hold the auto-dismiss timer so we can clear it if the screen unmounts
+    // before it fires (avoids navigating on an unmounted component).
+    const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         if (!permission) {
             requestPermission();
         }
     }, [permission, requestPermission]);
+
+    useEffect(() => {
+        return () => {
+            if (dismissTimer.current) {
+                clearTimeout(dismissTimer.current);
+            }
+        };
+    }, []);
 
     const resetScanLock = (): void => {
         lockRef.current = false;
@@ -85,10 +103,14 @@ export default function ScanScreen({ navigation }: ScanScreenProps): React.JSX.E
         // 3. Send the pairing request (token attached by the API interceptor).
         setSubmitting(true);
         try {
-            await linkPc(payload.pcId);
-            Alert.alert('PC Linked Successfully', 'This PC is now paired to your account.', [
-                { text: 'Done', onPress: () => navigation.goBack() },
-            ]);
+            await linkPc(payload.pcId, payload.venueId);
+            // Show the success state, then auto-dismiss back to Home so the
+            // scanner cleanly gets out of the way without a tap.
+            setLinked(true);
+            dismissTimer.current = setTimeout(() => {
+                // Home now lives inside the Main tab navigator.
+                navigation.navigate('Main', { screen: 'Home' });
+            }, SUCCESS_DISMISS_MS);
         } catch (error) {
             // Covers 409 Conflict ("already linked to another account"),
             // 401, network errors, etc.
@@ -116,6 +138,19 @@ export default function ScanScreen({ navigation }: ScanScreenProps): React.JSX.E
                 <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
+            </View>
+        );
+    }
+
+    // Success state — full-screen confirmation that auto-dismisses to Home.
+    if (linked) {
+        return (
+            <View style={[styles.container, styles.successContainer]}>
+                <Ionicons name="checkmark-circle" size={96} color="#22C55E" />
+                <Text style={styles.successTitle}>PC Linked Successfully</Text>
+                <Text style={styles.successSubtitle}>
+                    This PC is now paired to your account.
+                </Text>
             </View>
         );
     }
@@ -170,6 +205,24 @@ const styles = StyleSheet.create({
     },
     camera: {
         flex: 1,
+    },
+    successContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 32,
+    },
+    successTitle: {
+        color: 'white',
+        fontSize: 22,
+        fontWeight: 'bold',
+        marginTop: 24,
+        textAlign: 'center',
+    },
+    successSubtitle: {
+        color: 'rgba(255, 255, 255, 0.7)',
+        fontSize: 15,
+        marginTop: 8,
+        textAlign: 'center',
     },
     message: {
         textAlign: 'center',

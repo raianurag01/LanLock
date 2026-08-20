@@ -23,6 +23,25 @@ const api = {
     return () => {
       ipcRenderer.removeListener('start-grace-period', listener)
     }
+  },
+
+  /**
+   * Subscribe to game-detection changes from the process monitor.
+   * Returns an unsubscribe function for effect cleanup.
+   */
+  onGameStatus: (
+    callback: (status: { active: boolean; game: string | null }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      status: { active: boolean; game: string | null }
+    ): void => {
+      callback(status)
+    }
+    ipcRenderer.on('agent-game-status', listener)
+    return () => {
+      ipcRenderer.removeListener('agent-game-status', listener)
+    }
   }
 }
 

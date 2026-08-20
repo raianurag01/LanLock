@@ -1,34 +1,6 @@
 import axios from 'axios';
-import { Platform } from 'react-native';
-import Constants from 'expo-constants';
-import { getToken } from '../utils/secureStore';
-
-const API_PORT = 3000;
-
-/**
- * Resolve the backend host.
- *
- * In development the app is served by Metro, whose host URI is the dev
- * machine's LAN IP (e.g. "192.168.1.4:8081"). Reusing that IP means the API
- * is reachable from a physical device AND an emulator on the same network,
- * without hardcoding an address that changes between networks.
- *
- * Falls back to the Android-emulator loopback alias / localhost if Metro's
- * host is unavailable (e.g. a production build — set an explicit URL there).
- */
-function resolveApiHost() {
-    const hostUri =
-        Constants.expoConfig?.hostUri ??
-        Constants.expoGoConfig?.debuggerHost ??
-        '';
-    const host = hostUri.split(':')[0];
-    if (host) {
-        return host;
-    }
-    return Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
-}
-
-const API_URL = `http://${resolveApiHost()}:${API_PORT}/api/v1`;
+import { API_URL } from './config';
+import { deleteToken, getToken } from '../utils/secureStore';
 
 const apiClient = axios.create({
     baseURL: API_URL,
@@ -37,6 +9,14 @@ const apiClient = axios.create({
         'Content-Type': 'application/json',
     },
 });
+
+// AuthContext registers its signOut here so a 401 anywhere in the app drops
+// the user back to Login. Module-level callback (instead of importing the
+// context) avoids a client ↔ context require cycle.
+let onUnauthorized = null;
+export const setOnUnauthorized = (handler) => {
+    onUnauthorized = handler;
+};
 
 // Attach the JWT from secure storage to every outgoing request.
 apiClient.interceptors.request.use(
@@ -48,6 +28,20 @@ apiClient.interceptors.request.use(
         return config;
     },
     (error) => Promise.reject(error),
+);
+
+// Global 401 handling (mirrors lanlock-admin/src/api.js): the token is dead,
+// so delete it and notify AuthContext, then rethrow so the calling screen
+// still sees the failure.
+apiClient.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        if (error?.response?.status === 401) {
+            await deleteToken().catch(() => {});
+            onUnauthorized?.();
+        }
+        return Promise.reject(error);
+    },
 );
 
 export default apiClient;

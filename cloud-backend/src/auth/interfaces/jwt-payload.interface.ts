@@ -18,4 +18,6 @@ export interface AuthenticatedUser {
     username: string;
     role: UserRole;
     walletBalance: number;
+    /** ADMIN's home café (resolved fresh from the DB, not the JWT). */
+    venueId: string | null;
 }

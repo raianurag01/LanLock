@@ -4,7 +4,7 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import { v4 as uuidv4 } from 'uuid'
 import Store from 'electron-store'
-import { startMonitor, stopMonitor, getSessionActive } from './processMonitor'
+import { startMonitor, stopMonitor, getSessionActive, getDetectedGame } from './processMonitor'
 
 const execAsync = promisify(exec)
 
@@ -38,6 +38,15 @@ function resolvePcId(): string {
 }
 
 const pcId = resolvePcId()
+
+// High-visibility startup banner so this machine's identity is impossible to
+// miss in the terminal — it MUST match the pcId linked in the mobile app and
+// the room the backend targets on lock.
+console.log('========================================')
+console.log('[LanLock] DESKTOP AGENT STARTING')
+console.log('[LanLock] This device pcId:', pcId)
+console.log('[LanLock] (must match the pcId shown in the mobile app / backend lock logs)')
+console.log('========================================')
 
 let mainWindow: BrowserWindow | null = null
 
@@ -112,6 +121,12 @@ function createWindow(): void {
   })
   mainWindow = win
 
+  // Mirror renderer console output (socket telemetry etc.) into this
+  // terminal so debugging doesn't require opening DevTools.
+  win.webContents.on('console-message', (_event, _level, message) => {
+    console.log(`[Renderer] ${message}`)
+  })
+
   win.on('ready-to-show', () => win.show())
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null
@@ -134,6 +149,21 @@ function createWindow(): void {
 app.whenReady().then(() => {
   startMonitor()
   createWindow()
+
+  // Push game-detection changes to the renderer (additive telemetry channel —
+  // the renderer forwards it to the backend over its socket). Lock logic
+  // continues to read getSessionActive() directly and is unaffected.
+  let lastGame: string | null = null
+  let lastActive = false
+  setInterval(() => {
+    const active = getSessionActive()
+    const game = getDetectedGame()
+    if (active !== lastActive || game !== lastGame) {
+      lastActive = active
+      lastGame = game
+      mainWindow?.webContents.send('agent-game-status', { active, game })
+    }
+  }, 5_000)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

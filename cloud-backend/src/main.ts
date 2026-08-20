@@ -4,6 +4,10 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  // HTTP CORS for browser clients (the lanlock-admin dashboard). Native
+  // mobile/desktop apps send no Origin and are unaffected. Dev-permissive:
+  // tighten to an allowlist before any public deployment.
+  app.enableCors({ origin: true });
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(
     new ValidationPipe({
